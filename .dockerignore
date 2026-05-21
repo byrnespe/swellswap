@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.local
+*.log
+server/swellswap.db
+server/swellswap.db-shm
+server/swellswap.db-wal
+server/uploads/*
+!server/uploads/.gitkeep
+README.md
+.vscode
+.idea

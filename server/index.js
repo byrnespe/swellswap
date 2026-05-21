@@ -25,18 +25,15 @@ const VAPID_PUBLIC  = process.env.VAPID_PUBLIC  || 'BEl62iUYgUivxIkv69yViEuiBIa-
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE || 'UUxI4O8-FbRouAevSmBQ6co62grotkR34GqTpu6-Ox4';
 webpush.setVapidDetails('mailto:hello@swellswap.com', VAPID_PUBLIC, VAPID_PRIVATE);
 
-const allowedOrigins = isProd
-  ? [process.env.FRONTEND_URL].filter(Boolean)
-  : ['http://localhost:5173', 'http://localhost:5174'];
+// In production we serve frontend + API from the same origin, so CORS is permissive
+const corsOpts = { origin: true, credentials: true };
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: { origin: isProd ? allowedOrigins : '*', credentials: true },
-});
+const io = new Server(httpServer, { cors: corsOpts });
 
-app.use(cors({ origin: isProd ? allowedOrigins : '*', credentials: true }));
-app.use(express.json());
+app.use(cors(corsOpts));
+app.use(express.json({ limit: '12mb' }));
 
 // Serve uploaded images
 app.use('/uploads', express.static(join(__dirname, 'uploads')));
