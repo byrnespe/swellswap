@@ -8,6 +8,7 @@ import { v4 as uuid } from 'uuid';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import db from './db.js';
+import { seedIfEmpty } from './seed-on-startup.js';
 import authRoutes from './routes/auth.js';
 import boardRoutes from './routes/boards.js';
 import messageRoutes from './routes/messages.js';
@@ -131,5 +132,8 @@ io.on('connection', (socket) => {
   });
 });
 
+// Auto-seed demo data on first startup (idempotent — only runs if boards table is empty)
+try { seedIfEmpty(); } catch (err) { console.error('Seed error:', err.message); }
+
 const PORT = process.env.PORT || 3001;
-httpServer.listen(PORT, () => console.log(`SwellSwap server running on http://localhost:${PORT}`));
+httpServer.listen(PORT, '0.0.0.0', () => console.log(`SwellSwap server running on port ${PORT}`));
