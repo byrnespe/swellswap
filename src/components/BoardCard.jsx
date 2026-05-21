@@ -13,7 +13,8 @@ const conditionColors = {
 function resolveImage(url) {
   if (!url) return 'https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=500&q=80';
   if (url.startsWith('http')) return url;
-  return `http://localhost:3001${url}`;
+  // In production (served from same origin) use relative path; in dev, Vite proxies /uploads
+  return url;
 }
 
 export default function BoardCard({ board }) {

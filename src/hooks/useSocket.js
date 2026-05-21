@@ -14,7 +14,9 @@ export function useSocket() {
       return;
     }
     if (!socketInstance || !socketInstance.connected) {
-      socketInstance = io('http://localhost:3001', {
+      // In dev, Vite proxies; in prod, same origin
+      const socketUrl = import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin;
+      socketInstance = io(socketUrl, {
         auth: { token },
         reconnection: true,
         reconnectionDelay: 1000,

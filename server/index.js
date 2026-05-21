@@ -38,17 +38,7 @@ app.use(express.json({ limit: '12mb' }));
 // Serve uploaded images
 app.use('/uploads', express.static(join(__dirname, 'uploads')));
 
-// In production, serve the built React app
-if (isProd) {
-  const distPath = join(__dirname, '../dist');
-  app.use(express.static(distPath));
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
-    res.sendFile(join(distPath, 'index.html'));
-  });
-}
-
-// Routes
+// Routes (register API routes FIRST so they take priority)
 app.use('/api/auth', authRoutes);
 app.use('/api/boards', boardRoutes);
 app.use('/api/messages', messageRoutes);
@@ -58,6 +48,17 @@ app.use('/api/boost', boostRoutes);
 app.use('/api/admin', adminRoutes);
 app.get('/api/push/vapid-public-key', (_, res) => res.json({ key: VAPID_PUBLIC }));
 app.get('/api/health', (_, res) => res.json({ status: 'ok', time: Date.now() }));
+
+// In production, serve the built React app for everything else (SPA fallback)
+// Note: Express 5 doesn't support app.get('*', ...) — use middleware instead
+if (isProd) {
+  const distPath = join(__dirname, '../dist');
+  app.use(express.static(distPath));
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
+    res.sendFile(join(distPath, 'index.html'));
+  });
+}
 
 // Clean up expired featured listings every hour
 setInterval(() => {

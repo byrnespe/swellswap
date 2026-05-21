@@ -43,7 +43,7 @@ export default function PhotoUploader({ onChange }) {
         {previews.map((url, i) => (
           <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-white/5">
             <img
-              src={url.startsWith('http') ? url : `http://localhost:3001${url}`}
+              src={url.startsWith('http') ? url : url}
               alt=""
               className="w-full h-full object-cover"
             />
