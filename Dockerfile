@@ -1,29 +1,27 @@
-# Use official Node 20 image (has Python for better-sqlite3 native build)
-FROM node:20-bookworm-slim
-
-# Install build tools needed for better-sqlite3 native compilation
-RUN apt-get update && apt-get install -y python3 make g++ \
-    && rm -rf /var/lib/apt/lists/*
+# Node 20 with full Debian — has everything needed for native module compilation
+FROM node:20-bookworm
 
 WORKDIR /app
 
-# Copy package files first (better layer caching)
+# Ensure build tools are present for better-sqlite3 (already in -bookworm but doesn't hurt)
+RUN apt-get update && apt-get install -y python3 build-essential && rm -rf /var/lib/apt/lists/*
+
+# Copy package files first for better Docker layer caching
 COPY package*.json ./
 
-# Install all dependencies (including dev — we need vite to build)
-RUN npm ci
+# Install all deps (dev included — we need vite to build)
+RUN npm ci --no-audit --no-fund
 
-# Copy the rest of the source
+# Copy source
 COPY . .
 
 # Build the React frontend → dist/
 RUN npm run build
 
-# Production environment
-ENV NODE_ENV=production
+# Verify the build worked
+RUN ls -la dist/ && echo "✓ Build succeeded"
 
-# Railway sets PORT automatically; expose for clarity
+ENV NODE_ENV=production
 EXPOSE 3001
 
-# Start the Express server (it serves /api and /dist together)
 CMD ["node", "server/index.js"]
