@@ -31,3 +31,8 @@ server/swellswap.db-shm
 server/swellswap.db-wal
 .env
 .env.local
+
+# Agent skills (installed locally per-developer)
+.agents/
+.claude/skills/
+skills-lock.json
