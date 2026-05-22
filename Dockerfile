@@ -3,7 +3,7 @@ FROM node:20-bookworm
 
 WORKDIR /app
 
-# Ensure build tools are present for better-sqlite3 (already in -bookworm but doesn't hurt)
+# Build tools needed for any native npm packages
 RUN apt-get update && apt-get install -y python3 build-essential && rm -rf /var/lib/apt/lists/*
 
 # Copy package files first for better Docker layer caching
