@@ -1,35 +1,31 @@
 import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
 import webpush from 'web-push';
-import db from '../db.js';
+import sql from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 
-// Subscribe to push notifications
-router.post('/subscribe', requireAuth, (req, res) => {
+router.post('/subscribe', requireAuth, async (req, res) => {
   const { endpoint, keys } = req.body;
-  if (!endpoint || !keys?.p256dh || !keys?.auth) {
-    return res.status(400).json({ error: 'Invalid subscription' });
-  }
+  if (!endpoint || !keys?.p256dh || !keys?.auth) return res.status(400).json({ error: 'Invalid subscription' });
   const id = uuid();
-  db.prepare(`
-    INSERT OR REPLACE INTO push_subscriptions (id, user_id, endpoint, p256dh, auth)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(id, req.user.id, endpoint, keys.p256dh, keys.auth);
+  await sql`
+    INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth)
+    VALUES (${id}, ${req.user.id}, ${endpoint}, ${keys.p256dh}, ${keys.auth})
+    ON CONFLICT (user_id, endpoint) DO UPDATE SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth
+  `;
   res.json({ success: true });
 });
 
-// Unsubscribe
-router.post('/unsubscribe', requireAuth, (req, res) => {
+router.post('/unsubscribe', requireAuth, async (req, res) => {
   const { endpoint } = req.body;
-  db.prepare('DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?').run(req.user.id, endpoint);
+  await sql`DELETE FROM push_subscriptions WHERE user_id = ${req.user.id} AND endpoint = ${endpoint}`;
   res.json({ success: true });
 });
 
-// Internal: send push to a user (called by socket handler)
 export async function sendPushToUser(userId, payload) {
-  const subs = db.prepare('SELECT * FROM push_subscriptions WHERE user_id = ?').all(userId);
+  const subs = await sql`SELECT * FROM push_subscriptions WHERE user_id = ${userId}`;
   for (const sub of subs) {
     try {
       await webpush.sendNotification(
@@ -38,7 +34,7 @@ export async function sendPushToUser(userId, payload) {
       );
     } catch (err) {
       if (err.statusCode === 410 || err.statusCode === 404) {
-        db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(sub.id);
+        await sql`DELETE FROM push_subscriptions WHERE id = ${sub.id}`;
       }
     }
   }

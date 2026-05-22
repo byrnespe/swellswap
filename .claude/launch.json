@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Vite (React frontend)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:client"],
+      "port": 5173
+    },
+    {
+      "name": "Express + Socket.IO (API server)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server/index.js"],
+      "port": 3001
+    },
+    {
+      "name": "Full stack (Vite + Express concurrently)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173
+    }
+    ,{
+      "name": "Vercel dev",
+      "runtimeExecutable": "vercel",
+      "runtimeArgs": ["dev"],
+      "port": 3000
+    }
+  ]
+}

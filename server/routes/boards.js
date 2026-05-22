@@ -1,11 +1,10 @@
 import { Router } from 'express';
 import { v4 as uuid } from 'uuid';
-import db from '../db.js';
+import sql from '../db.js';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
 
 const router = Router();
 
-// Confirmed surfboard-only images (boards on racks, leaning on walls, on grass — no people in shot)
 const typeImages = {
   Shortboard: 'https://images.unsplash.com/photo-1530870110042-98b2cb110834?w=600&q=80',
   Longboard:  'https://images.unsplash.com/photo-1545487831-65a8a92a08c3?w=600&q=80',
@@ -16,117 +15,123 @@ const typeImages = {
   default:    'https://images.unsplash.com/photo-1530870110042-98b2cb110834?w=600&q=80',
 };
 
-function parseBoard(b) {
-  b.trade    = b.trade === 1;
-  b.featured = b.featured === 1;
-  try { b.images = JSON.parse(b.images || '[]'); } catch { b.images = []; }
-  if (!b.image_url && b.images.length > 0) b.image_url = b.images[0];
-  return b;
-}
-
 // GET all boards — featured first, then newest
-router.get('/', optionalAuth, (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
   const { type, condition, maxPrice, trade, q } = req.query;
   const now = Math.floor(Date.now() / 1000);
-  let sql = `
+
+  // Build dynamic WHERE conditions using postgres.js fragment composition
+  const conds = [sql`b.status = 'active'`];
+  if (type && type !== 'All')           conds.push(sql`b.type = ${type}`);
+  if (condition && condition !== 'Any') conds.push(sql`b.condition = ${condition}`);
+  if (maxPrice)                         conds.push(sql`b.price <= ${Number(maxPrice)}`);
+  if (trade === 'true')                 conds.push(sql`b.trade = TRUE`);
+  if (q) {
+    const like = `%${q}%`;
+    conds.push(sql`(b.title ILIKE ${like} OR b.brand ILIKE ${like} OR b.type ILIKE ${like})`);
+  }
+
+  // Combine conditions with AND
+  const where = conds.reduce((acc, c, i) => i === 0 ? c : sql`${acc} AND ${c}`);
+
+  const boards = await sql`
     SELECT b.*, u.username as seller_name, u.avatar_color as seller_color
     FROM boards b JOIN users u ON b.user_id = u.id
-    WHERE b.status = 'active'
+    WHERE ${where}
+    ORDER BY (CASE WHEN b.featured = TRUE AND b.featured_until > ${now} THEN 0 ELSE 1 END), b.created_at DESC
   `;
-  const params = [];
-  if (type && type !== 'All')       { sql += ' AND b.type = ?'; params.push(type); }
-  if (condition && condition !== 'Any') { sql += ' AND b.condition = ?'; params.push(condition); }
-  if (maxPrice)                     { sql += ' AND b.price <= ?'; params.push(Number(maxPrice)); }
-  if (trade === 'true')             { sql += ' AND b.trade = 1'; }
-  if (q) { sql += ' AND (b.title LIKE ? OR b.brand LIKE ? OR b.type LIKE ?)'; const l = `%${q}%`; params.push(l, l, l); }
-  // Featured (non-expired) first, then newest
-  sql += ` ORDER BY CASE WHEN b.featured = 1 AND b.featured_until > ${now} THEN 0 ELSE 1 END, b.created_at DESC`;
-
-  const boards = db.prepare(sql).all(...params).map(parseBoard);
 
   if (req.user) {
-    const saved = db.prepare('SELECT board_id FROM saved_boards WHERE user_id = ?').all(req.user.id).map(r => r.board_id);
-    boards.forEach(b => { b.saved = saved.includes(b.id); });
+    const saved = await sql`SELECT board_id FROM saved_boards WHERE user_id = ${req.user.id}`;
+    const savedSet = new Set(saved.map(r => r.board_id));
+    boards.forEach(b => { b.saved = savedSet.has(b.id); });
   } else {
     boards.forEach(b => { b.saved = false; });
   }
   res.json(boards);
 });
 
+// GET saved boards for user
+router.get('/user/saved', requireAuth, async (req, res) => {
+  const boards = await sql`
+    SELECT b.*, u.username as seller_name, u.avatar_color as seller_color
+    FROM saved_boards sb
+    JOIN boards b ON sb.board_id = b.id
+    JOIN users u ON b.user_id = u.id
+    WHERE sb.user_id = ${req.user.id} AND b.status = 'active'
+    ORDER BY sb.created_at DESC
+  `;
+  boards.forEach(b => { b.saved = true; });
+  res.json(boards);
+});
+
+// GET my listings
+router.get('/user/listings', requireAuth, async (req, res) => {
+  const boards = await sql`
+    SELECT b.*, u.username as seller_name, u.avatar_color as seller_color
+    FROM boards b JOIN users u ON b.user_id = u.id
+    WHERE b.user_id = ${req.user.id} ORDER BY b.created_at DESC
+  `;
+  boards.forEach(b => { b.saved = false; });
+  res.json(boards);
+});
+
 // GET single board
-router.get('/:id', optionalAuth, (req, res) => {
-  if (req.params.id === 'user') return res.status(400).json({ error: 'Invalid' });
-  const board = db.prepare(`
+router.get('/:id', optionalAuth, async (req, res) => {
+  const [board] = await sql`
     SELECT b.*, u.username as seller_name, u.avatar_color as seller_color,
-    (SELECT COUNT(*) FROM boards WHERE user_id = b.user_id AND status = 'active') as seller_listings
-    FROM boards b JOIN users u ON b.user_id = u.id WHERE b.id = ?
-  `).get(req.params.id);
+      (SELECT COUNT(*) FROM boards WHERE user_id = b.user_id AND status = 'active')::int as seller_listings
+    FROM boards b JOIN users u ON b.user_id = u.id WHERE b.id = ${req.params.id}
+  `;
   if (!board) return res.status(404).json({ error: 'Board not found' });
-  db.prepare('UPDATE boards SET views = views + 1 WHERE id = ?').run(req.params.id);
+
+  await sql`UPDATE boards SET views = views + 1 WHERE id = ${req.params.id}`;
   board.views += 1;
-  parseBoard(board);
+
   if (req.user) {
-    board.saved = !!db.prepare('SELECT 1 FROM saved_boards WHERE user_id = ? AND board_id = ?').get(req.user.id, board.id);
+    const [saved] = await sql`SELECT 1 FROM saved_boards WHERE user_id = ${req.user.id} AND board_id = ${board.id}`;
+    board.saved = !!saved;
   }
   res.json(board);
 });
 
 // POST create board
-router.post('/', requireAuth, (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
   const { title, brand, type, length, width, thickness, volume, fins, condition, price, trade, description, location, images } = req.body;
   if (!title || !type || !condition || !price || !location) return res.status(400).json({ error: 'Missing required fields' });
 
   const id = uuid();
   const imageList = Array.isArray(images) && images.length > 0 ? images : [];
   const imageUrl  = imageList[0] || typeImages[type] || typeImages.default;
-  const imagesJson = JSON.stringify(imageList.length > 0 ? imageList : [imageUrl]);
+  const finalImages = imageList.length > 0 ? imageList : [imageUrl];
 
-  db.prepare(`
+  await sql`
     INSERT INTO boards (id, user_id, title, brand, type, length, width, thickness, volume, fins, condition, price, trade, description, location, image_url, images)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, req.user.id, title, brand||'', type, length||'', width||'', thickness||'', volume||'', fins||'', condition, Number(price), trade?1:0, description||'', location, imageUrl, imagesJson);
-
-  res.json(parseBoard(db.prepare('SELECT * FROM boards WHERE id = ?').get(id)));
+    VALUES (${id}, ${req.user.id}, ${title}, ${brand || ''}, ${type}, ${length || ''}, ${width || ''}, ${thickness || ''}, ${volume || ''}, ${fins || ''}, ${condition}, ${Number(price)}, ${!!trade}, ${description || ''}, ${location}, ${imageUrl}, ${sql.json(finalImages)})
+  `;
+  const [board] = await sql`SELECT * FROM boards WHERE id = ${id}`;
+  res.json(board);
 });
 
 // DELETE (mark sold)
-router.delete('/:id', requireAuth, (req, res) => {
-  const board = db.prepare('SELECT * FROM boards WHERE id = ?').get(req.params.id);
-  if (!board) return res.status(404).json({ error: 'Not found' });
-  if (board.user_id !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
-  db.prepare("UPDATE boards SET status = 'sold' WHERE id = ?").run(req.params.id);
+router.delete('/:id', requireAuth, async (req, res) => {
+  const [board] = await sql`SELECT * FROM boards WHERE id = ${req.params.id}`;
+  if (!board)                              return res.status(404).json({ error: 'Not found' });
+  if (board.user_id !== req.user.id)       return res.status(403).json({ error: 'Forbidden' });
+  await sql`UPDATE boards SET status = 'sold' WHERE id = ${req.params.id}`;
   res.json({ success: true });
 });
 
 // POST save/unsave
-router.post('/:id/save', requireAuth, (req, res) => {
-  const existing = db.prepare('SELECT 1 FROM saved_boards WHERE user_id = ? AND board_id = ?').get(req.user.id, req.params.id);
+router.post('/:id/save', requireAuth, async (req, res) => {
+  const [existing] = await sql`SELECT 1 FROM saved_boards WHERE user_id = ${req.user.id} AND board_id = ${req.params.id}`;
   if (existing) {
-    db.prepare('DELETE FROM saved_boards WHERE user_id = ? AND board_id = ?').run(req.user.id, req.params.id);
+    await sql`DELETE FROM saved_boards WHERE user_id = ${req.user.id} AND board_id = ${req.params.id}`;
     res.json({ saved: false });
   } else {
-    db.prepare('INSERT OR IGNORE INTO saved_boards (user_id, board_id) VALUES (?, ?)').run(req.user.id, req.params.id);
+    await sql`INSERT INTO saved_boards (user_id, board_id) VALUES (${req.user.id}, ${req.params.id}) ON CONFLICT DO NOTHING`;
     res.json({ saved: true });
   }
-});
-
-// GET saved boards
-router.get('/user/saved', requireAuth, (req, res) => {
-  const boards = db.prepare(`
-    SELECT b.*, u.username as seller_name, u.avatar_color as seller_color
-    FROM saved_boards sb JOIN boards b ON sb.board_id = b.id JOIN users u ON b.user_id = u.id
-    WHERE sb.user_id = ? AND b.status = 'active' ORDER BY sb.created_at DESC
-  `).all(req.user.id).map(b => { parseBoard(b); b.saved = true; return b; });
-  res.json(boards);
-});
-
-// GET my listings
-router.get('/user/listings', requireAuth, (req, res) => {
-  const boards = db.prepare(`
-    SELECT b.*, u.username as seller_name, u.avatar_color as seller_color
-    FROM boards b JOIN users u ON b.user_id = u.id WHERE b.user_id = ? ORDER BY b.created_at DESC
-  `).all(req.user.id).map(b => { parseBoard(b); b.saved = false; return b; });
-  res.json(boards);
 });
 
 export default router;
