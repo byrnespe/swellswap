@@ -14,7 +14,10 @@ const httpServer = createServer(app);
 app.get('/api/health', (_, res) => res.json({ status: 'ok', time: Date.now() }));
 app.get('/api/ping',   (_, res) => res.send('pong'));
 
-const PORT = parseInt(process.env.PORT, 10) || 3001;
+// Production: use Railway's PORT. Dev: hardcode 3001 (don't inherit from parent process / preview tool).
+const PORT = process.env.NODE_ENV === 'production'
+  ? (parseInt(process.env.PORT, 10) || 3001)
+  : 3001;
 console.log(`▶ Listening on 0.0.0.0:${PORT}`);
 
 httpServer.listen(PORT, '0.0.0.0', () => {
