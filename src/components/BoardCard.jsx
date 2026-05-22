@@ -11,7 +11,7 @@ const conditionColors = {
 };
 
 function resolveImage(url) {
-  if (!url) return 'https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=500&q=80';
+  if (!url) return 'https://images.unsplash.com/photo-1530870110042-98b2cb110834?w=600&q=80';
   if (url.startsWith('http')) return url;
   // In production (served from same origin) use relative path; in dev, Vite proxies /uploads
   return url;

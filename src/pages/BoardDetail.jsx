@@ -78,7 +78,7 @@ export default function BoardDetail() {
     <div className="pb-32">
       <div className="relative">
         <img
-          src={board.image_url || 'https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=500&q=80'}
+          src={board.image_url || 'https://images.unsplash.com/photo-1530870110042-98b2cb110834?w=600&q=80'}
           alt={board.title}
           className="w-full h-64 object-cover"
         />

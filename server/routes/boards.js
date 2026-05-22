@@ -5,13 +5,15 @@ import { requireAuth, optionalAuth } from '../middleware/auth.js';
 
 const router = Router();
 
+// Confirmed surfboard-only images (boards on racks, leaning on walls, on grass — no people in shot)
 const typeImages = {
-  Shortboard: 'https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=500&q=80',
-  Longboard:  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=500&q=80',
-  Fish:       'https://images.unsplash.com/photo-1455729552865-3658a5d39692?w=500&q=80',
-  Gun:        'https://images.unsplash.com/photo-1531722569936-825d4eaf4b9d?w=500&q=80',
-  Funboard:   'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=500&q=80',
-  default:    'https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=500&q=80',
+  Shortboard: 'https://images.unsplash.com/photo-1530870110042-98b2cb110834?w=600&q=80',
+  Longboard:  'https://images.unsplash.com/photo-1545487831-65a8a92a08c3?w=600&q=80',
+  Fish:       'https://images.unsplash.com/photo-1574258495973-f010dfbb5371?w=600&q=80',
+  Gun:        'https://images.unsplash.com/photo-1571902943202-507ec2618e8f?w=600&q=80',
+  Funboard:   'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=600&q=80',
+  Foil:       'https://images.unsplash.com/photo-1568849676085-51415703900f?w=600&q=80',
+  default:    'https://images.unsplash.com/photo-1530870110042-98b2cb110834?w=600&q=80',
 };
 
 function parseBoard(b) {

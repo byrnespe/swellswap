@@ -136,7 +136,7 @@ export default function Admin() {
             {boards.length === 0 && <p className="text-slate-500 text-center py-8">No listings yet</p>}
             {boards.map(b => (
               <div key={b.id} className="bg-white/5 rounded-xl p-3 flex items-center gap-3">
-                <img src={b.image_url || 'https://images.unsplash.com/photo-1502680390469-be75c86b636f?w=80&q=60'} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
+                <img src={b.image_url || 'https://images.unsplash.com/photo-1530870110042-98b2cb110834?w=80&q=60'} alt="" className="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-white text-sm font-medium truncate">{b.title}</p>
                   <p className="text-slate-500 text-xs">{b.seller_name} · ${b.price} · {b.status}</p>
